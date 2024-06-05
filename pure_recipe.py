@@ -10,7 +10,11 @@ console = Console()
 
 
 def main():
-    settings = load_yaml()
+    settings = {
+        "yield": True,
+        "time": True
+    }
+
     args = parse_arguments()
     url = args.url
 
@@ -55,23 +59,77 @@ def save_recipe_to_markdown(recipe_url, yaml_settings):
     :return: path to file
     """
     try:
-        scraper = scrape_me(recipe_url)
+        scraper = scrape_me(recipe_url, wild_mode=True)
     except Exception as e:
         console.print(f"\nCould not scrape recipe, error: {str(e)}", style="bright_cyan bold")
-    directory = yaml_settings.get("directory")
-    # if not os.path.exists(directory):
-    #   os.makedirs(directory, mode="0o777")
+
     title = scraper.title().replace(" ", "-")
-    recipe_file = directory + "/" + format_file_name(title) + ".md"
+    recipe_file = "out/" + format_file_name(title) + ".md"
+
+    console.print(scraper)
 
     with open(recipe_file, "w+") as text_file:
         print(f"# {title}", file=text_file)
 
-        if yaml_settings["yield"] != False:
-            print(f"**Serves:** {scraper.yields()}", file=text_file)
-        if yaml_settings["time"] != False:
-            print(f"**Total Time:** {scraper.total_time()} mins", file=text_file)
+        print(f"**Serves:** {scraper.yields()}\n", file=text_file)
+        print(f"**Total Time:** {scraper.total_time()} mins\n", file=text_file)
+        print(f"**Source URL:** {recipe_url}\n", file=text_file)
 
+        print("\n\n----\n\n", file=text_file)
+
+        try:
+            print(f"**host:** {scraper.host()}\n", file=text_file)
+        except Exception as e:
+            console.print(f"    Error writing host to file: {str(e)}", style="bright_green bold")
+
+        try:
+            print(f"**title:** {scraper.title()}\n", file=text_file)
+        except Exception as e:
+            console.print(f"    Error writing title to file: {str(e)}", style="bright_green bold")
+
+        try:
+            print(f"**total_time:** {scraper.total_time()}\n", file=text_file)
+        except Exception as e:
+            console.print(f"    Error writing total_time to file: {str(e)}", style="bright_green bold")
+
+        try:
+            print(f"**yields:** {scraper.yields()}\n", file=text_file)
+        except Exception as e:
+            console.print(f"    Error writing yields to file: {str(e)}", style="bright_green bold")
+
+        try:
+            print(f"**nutrients:** {scraper.nutrients()}\n", file=text_file)
+        except Exception as e:
+            console.print(f"    Error writing nutrients to file: {str(e)}", style="bright_green bold")
+
+        try:
+            print(f"**canonical_url:** {scraper.canonical_url()}\n", file=text_file)
+        except Exception as e:
+            console.print(f"    Error writing canonical_url to file: {str(e)}", style="bright_green bold")
+
+        try:
+            print(f"**equipment:** {scraper.equipment()}\n", file=text_file)
+        except Exception as e:
+            console.print(f"    Error writing equipment to file: {str(e)}", style="bright_green bold")
+
+        try:
+            print(f"**cooking_method:** {scraper.cooking_method()}\n", file=text_file)
+        except Exception as e:
+            console.print(f"    Error writing cooking_method to file: {str(e)}", style="bright_green bold")
+
+        try:
+            print(f"**keywords:** {scraper.keywords()}\n", file=text_file)
+        except Exception as e:
+            console.print(f"    Error writing keywords to file: {str(e)}", style="bright_green bold")
+
+        try:
+            print(f"**dietary_restrictions:** {scraper.dietary_restrictions()}\n", file=text_file)
+        except Exception as e:
+            console.print(f"    Error writing dietary_restrictions to file: {str(e)}", style="bright_green bold")
+
+
+        print("\n\n----\n\n", file=text_file)
+        
         print(f"\n## Ingredients", file=text_file)
 
         for ingredient in scraper.ingredients():
@@ -101,21 +159,21 @@ def view_recipe(recipe_url, yaml_settings):
     :rtype: bool
     :return: True if successful, False otherwise.
     """
-    try:
-        file_path = save_recipe_to_markdown(recipe_url, yaml_settings)
-        f = open(file_path, "r")
-        md = Markdown(f.read())
-        f.close()
-        print_markdown(md)
-    except:
-        console.print("\nError in view_recipe function.\n", style="bright_red")
-        return False
+    # try:
+    file_path = save_recipe_to_markdown(recipe_url, yaml_settings)
+    f = open(file_path, "r")
+    md = Markdown(f.read())
+    f.close()
+    print_markdown(md)
+    # except:
+        # console.print("\nError in view_recipe function.\n", style="bright_red")
+        # return False
 
     return True
 
 
 def save_list_of_recipes(url, settings):
-    os.chdir(settings["directory"])
+    # os.chdir(settings["directory"])
     f = open(url, "r")
     for line in f:
         try:
@@ -177,54 +235,6 @@ def browse_recipes():
             print_markdown(md)
 
     choose_recipe()
-
-
-def load_yaml():
-    """
-    Loads yaml settings. Searches for a config file, creating one if not present.
-
-    :rtype: dictionary
-    :return: mappings for each setting. ex: {time: 'true'}
-    """
-
-    config_dir = os.path.join(platformdirs.user_config_dir(), "pure_recipe")
-    config_path = "config.yaml"
-
-    if not os.path.exists(config_dir):
-        os.makedirs(config_dir)
-
-    os.chdir(config_dir)
-
-    # Create the file if it doesn't exist
-    if not os.path.exists(config_path):
-        with open(config_path, "a"):
-            os.utime(config_path)
-
-    # Open the file since we can be sure it exists now
-    with open(config_path, "r") as file:
-        settings = yaml.safe_load(file)
-
-    # Catch an empty file, even if it wasn't just created
-    if settings is None:
-        settings = dict()
-        settings["directory"] = None
-
-
-    # Generate and update the recipe directory if it doesn't exist
-    recipe_directory = settings.get("directory")
-    if not os.path.exists(recipe_directory):
-        os.makedirs(recipe_directory)
-        print('Created new folder for saving recipes at:' +recipe_directory)
-
-
-    # Generate and update the time and yield options if they don't exist
-    if settings.get("time") is None or "":
-        settings["time"] = "true"
-    if settings.get("yield") is None or "":
-        settings["yield"] = "true"
-
-    # Update the settings file with the changed field(s)
-    return settings
 
 
 def parse_arguments():
