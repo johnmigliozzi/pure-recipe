@@ -1,4 +1,5 @@
 from recipe_scrapers import scrape_me
+from recipe_scrapers._exceptions import SchemaOrgException
 from rich.console import Console
 from rich.markdown import Markdown
 import argparse
@@ -18,36 +19,16 @@ def main():
     args = parse_arguments()
     url = args.url
 
-    try: 
-        if args.operations == "view":
-            view_recipe(args.url, settings)
-        elif args.operations == "save":
-            save_recipe_to_markdown(args.url, settings)
-        elif args.operations == "list":
-            save_list_of_recipes(args.url, settings)
-        elif args.operations == "browse":
-            browse_recipes()
-        else: 
-            console.print("Invlaid operation. See documentation.", style="bright_red")
-    except Exception as e:
-        console.print(f"\nAn error occured: {str(e)}", style="bright_red bold")
-
-
-def format_file_name(recipe_title):
-    """
-    Converts the recipe title to a nice format.
-
-    :param recipe_title: a string containing a recipe title.
-    :return: formatted title
-    :rtype: string
-    """
-    s = list(recipe_title.lower())
-
-    for i, char in enumerate(s):
-        if char.isspace():
-            s[i] = "-"
-    return "".join(s)
-
+    if args.operations == "view":
+        view_recipe(args.url, settings)
+    elif args.operations == "save":
+        save_recipe_to_markdown(args.url, settings)
+    elif args.operations == "list":
+        save_list_of_recipes(args.url, settings)
+    elif args.operations == "browse":
+        browse_recipes()
+    else: 
+        console.print("Invlaid operation. See documentation.", style="bright_red")
 
 def save_recipe_to_markdown(recipe_url, yaml_settings):
     """
@@ -58,87 +39,145 @@ def save_recipe_to_markdown(recipe_url, yaml_settings):
     :rtype: string
     :return: path to file
     """
+    
+    console.print(f"Beginning Recipe at url: {recipe_url}", style="bright_cyan bold")
+    
     try:
         scraper = scrape_me(recipe_url, wild_mode=True)
     except Exception as e:
-        console.print(f"\nCould not scrape recipe, error: {str(e)}", style="bright_cyan bold")
+        console.print(f"    Could not scrape recipe, error: {str(e)}", style="bright_red")
+        return None
 
-    title = scraper.title().replace(" ", "-")
-    recipe_file = "out/" + format_file_name(title) + ".md"
-
-    console.print(scraper)
+    recipe_file = "out/" + scraper.title() + ".md"
 
     with open(recipe_file, "w+") as text_file:
-        print(f"# {title}", file=text_file)
 
-        print(f"**Serves:** {scraper.yields()}\n", file=text_file)
-        print(f"**Total Time:** {scraper.total_time()} mins\n", file=text_file)
-        print(f"**Source URL:** {recipe_url}\n", file=text_file)
+        # Get variables for frontmatter
 
-        print("\n\n----\n\n", file=text_file)
+        output_url = ""
+        try:
+            scraper.canonical_url()
+        except AttributeError:
+            console.print("    No URL found")
+        except SchemaOrgException:
+            console.print("    Schema Exception")
+        else:
+            output_url = scraper.canonical_url()
+
+        output_keywords = ""
+        try:
+            scraper.keywords()
+        except AttributeError:
+            console.print("    No Keywords found")
+        except SchemaOrgException:
+            console.print("    Schema Exception")
+        else:
+            output_keywords = scraper.keywords()
+
+        output_total_time = ""
+        try:
+            scraper.total_time()
+        except AttributeError:
+            console.print("    No Total Time found")
+        except SchemaOrgException:
+            console.print("    Schema Exception")
+        else:
+            output_total_time = scraper.total_time()
+
+        output_servings = ""
+        try:
+            scraper.yields()
+        except AttributeError:
+            console.print("    No Yields found")
+        except SchemaOrgException:
+            console.print("    Schema Exception")
+        else:
+            output_servings = scraper.yields()
+
+        # Print yaml frontmatter
+        print(f"---", file = text_file)
+        print(f"type: recipe", file = text_file)
+        print(f"url: {output_url}", file = text_file)
+        print(f"tags: {output_keywords}", file = text_file)
+        print(f"totalTime: {output_total_time}", file = text_file)
+        print(f"activeTime: ", file = text_file)
+        print(f"waitTime: ", file = text_file)
+        print(f"servings: {output_servings}", file = text_file)
+        print(f"spicy: ", file = text_file)
+        print(f"status: tried", file = text_file)
+        print(f"triedMultiples: ", file = text_file)
+        print(f"danielleRating: ", file = text_file)
+        print(f"johnRating: ", file = text_file)
+
+        print(f"---", file = text_file)           
+
+        # Print Equipment
 
         try:
-            print(f"**host:** {scraper.host()}\n", file=text_file)
-        except Exception as e:
-            console.print(f"    Error writing host to file: {str(e)}", style="bright_green bold")
+            scraper.equipment()
+        except NotImplementedError:
+            console.print("    Equipment Attribute not implemented")
+        except AttributeError:
+            console.print("    No equipment found")
+        except SchemaOrgException:
+            console.print("    Schema Exception")
+        else:
+            print(f"\n# Equipment", file = text_file)
+
+            for equipment in scraper.equipment():
+                print(f"- {equipment}", file = text_file)
+
+
+        # Print Ingredients
 
         try:
-            print(f"**title:** {scraper.title()}\n", file=text_file)
+            scraper.ingredient_groups()
+        except AttributeError:
+            console.print("    No Ingredients found")
+        except SchemaOrgException:
+            console.print("    Schema Exception")
         except Exception as e:
-            console.print(f"    Error writing title to file: {str(e)}", style="bright_green bold")
+            console.print(f"    Unknown Error in ingredient_groups: {e}")
+        else:
+            print(f"\n# Ingredients", file = text_file)
+ 
+            for group in scraper.ingredient_groups():
+                if len(scraper.ingredient_groups()) > 1:
+                    print(f"\n## {group}", file = text_file)
+                
+                grouped_ingredients = []
+                grouped_ingredients.extend(group.ingredients)
+                for ingredient in grouped_ingredients:
+                    print(f"- {ingredient}", file = text_file)
+
+        # Print Instructions
 
         try:
-            print(f"**total_time:** {scraper.total_time()}\n", file=text_file)
-        except Exception as e:
-            console.print(f"    Error writing total_time to file: {str(e)}", style="bright_green bold")
+            scraper.instructions_list()
+        except AttributeError:
+            console.print("    No Instructions found")
+        except SchemaOrgException:
+            console.print("    Schema Exception")
+        else:
+            print(f"\n# Instructions", file = text_file)
+
+            for [index, instruction] in enumerate(scraper.instructions_list()):
+                print(f"{index+1}. {instruction}", file = text_file)
+
+        # Print Nutritional Information
 
         try:
-            print(f"**yields:** {scraper.yields()}\n", file=text_file)
-        except Exception as e:
-            console.print(f"    Error writing yields to file: {str(e)}", style="bright_green bold")
+            scraper.nutrients()
+        except AttributeError:
+            console.print("    No Nutritional Information found")
+        except SchemaOrgException:
+            console.print("    Schema Exception")
+        else:
+            if len(scraper.nutrients()) > 0:
+                print(f"\n# Nutritional Information", file = text_file)
 
-        try:
-            print(f"**nutrients:** {scraper.nutrients()}\n", file=text_file)
-        except Exception as e:
-            console.print(f"    Error writing nutrients to file: {str(e)}", style="bright_green bold")
-
-        try:
-            print(f"**canonical_url:** {scraper.canonical_url()}\n", file=text_file)
-        except Exception as e:
-            console.print(f"    Error writing canonical_url to file: {str(e)}", style="bright_green bold")
-
-        try:
-            print(f"**equipment:** {scraper.equipment()}\n", file=text_file)
-        except Exception as e:
-            console.print(f"    Error writing equipment to file: {str(e)}", style="bright_green bold")
-
-        try:
-            print(f"**cooking_method:** {scraper.cooking_method()}\n", file=text_file)
-        except Exception as e:
-            console.print(f"    Error writing cooking_method to file: {str(e)}", style="bright_green bold")
-
-        try:
-            print(f"**keywords:** {scraper.keywords()}\n", file=text_file)
-        except Exception as e:
-            console.print(f"    Error writing keywords to file: {str(e)}", style="bright_green bold")
-
-        try:
-            print(f"**dietary_restrictions:** {scraper.dietary_restrictions()}\n", file=text_file)
-        except Exception as e:
-            console.print(f"    Error writing dietary_restrictions to file: {str(e)}", style="bright_green bold")
-
-
-        print("\n\n----\n\n", file=text_file)
-        
-        print(f"\n## Ingredients", file=text_file)
-
-        for ingredient in scraper.ingredients():
-            print(f"-", ingredient, file=text_file)
-
-        print(f"\n## Instructions", file=text_file)
-
-        for index, instruction in enumerate(scraper.instructions_list()):
-            print(f"{index+1}.", instruction, file=text_file)
+                for key in scraper.nutrients():
+                    print(f"**{key}**: {scraper.nutrients()[key]}", file = text_file)
 
     return recipe_file
 
@@ -159,31 +198,20 @@ def view_recipe(recipe_url, yaml_settings):
     :rtype: bool
     :return: True if successful, False otherwise.
     """
-    # try:
     file_path = save_recipe_to_markdown(recipe_url, yaml_settings)
     f = open(file_path, "r")
     md = Markdown(f.read())
     f.close()
     print_markdown(md)
-    # except:
-        # console.print("\nError in view_recipe function.\n", style="bright_red")
-        # return False
 
     return True
 
 
 def save_list_of_recipes(url, settings):
-    # os.chdir(settings["directory"])
     f = open(url, "r")
     for line in f:
-        try:
-            single_url = line.strip().rstrip("\n")
-            save_recipe_to_markdown(single_url, settings)
-        except:
-            console.print(
-                "\nFile error. Try again using proper file format. See documentation.\n",
-                style="bright_red",
-            )
+        single_url = line.strip().rstrip("\n")
+        save_recipe_to_markdown(single_url, settings)
 
 
 def browse_recipes():
