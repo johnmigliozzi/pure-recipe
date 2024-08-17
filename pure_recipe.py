@@ -97,17 +97,20 @@ def save_recipe_to_markdown(recipe_url, yaml_settings):
         # Print yaml frontmatter
         print(f"---", file = text_file)
         print(f"type: recipe", file = text_file)
+        print(f"source: ", file = text_file)
         print(f"url: {output_url}", file = text_file)
         print(f"tags: {output_keywords}", file = text_file)
         print(f"totalTime: {output_total_time}", file = text_file)
         print(f"activeTime: ", file = text_file)
         print(f"waitTime: ", file = text_file)
         print(f"servings: {output_servings}", file = text_file)
-        print(f"spicy: ", file = text_file)
+        print(f"spice: ", file = text_file)
         print(f"status: tried", file = text_file)
         print(f"triedMultiples: ", file = text_file)
         print(f"danielleRating: ", file = text_file)
         print(f"johnRating: ", file = text_file)
+        print(f"topic: \"[[Cooking]]\"", file = text_file)
+        print(f"dg-publish: false", file = text_file)
 
         print(f"---", file = text_file)           
 
